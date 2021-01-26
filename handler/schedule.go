@@ -5,7 +5,10 @@ import (
 
 	"github.com/imdario/mergo"
 	"k8s.io/apimachinery/pkg/api/errors"
+	metav1 "k8s.io/apimachinery/pkg/apis/meta/v1"
 	"k8s.io/apimachinery/pkg/types"
+	"k8s.io/apimachinery/pkg/util/rand"
+	"sigs.k8s.io/controller-runtime/pkg/client"
 	"sigs.k8s.io/controller-runtime/pkg/controller/controllerutil"
 
 	k8upv1alpha1 "github.com/vshn/k8up/api/v1alpha1"
@@ -14,14 +17,11 @@ import (
 	"github.com/vshn/k8up/scheduler"
 )
 
-const (
-	scheduleFinalizerName = "k8up.syn.tools/schedule"
-)
-
 // ScheduleHandler handles the reconciles for the schedules. Schedules are a special
 // type of k8up objects as they will only trigger jobs indirectly.
 type ScheduleHandler struct {
-	schedule *k8upv1alpha1.Schedule
+	schedule          *k8upv1alpha1.Schedule
+	effectiveSchedule *k8upv1alpha1.EffectiveSchedule
 	job.Config
 	requireStatusUpdate bool
 }
@@ -41,7 +41,7 @@ func (s *ScheduleHandler) Handle() error {
 	namespacedName := types.NamespacedName{Name: s.schedule.GetName(), Namespace: s.schedule.GetNamespace()}
 
 	if s.schedule.GetDeletionTimestamp() != nil {
-		controllerutil.RemoveFinalizer(s.schedule, scheduleFinalizerName)
+		controllerutil.RemoveFinalizer(s.schedule, k8upv1alpha1.ScheduleFinalizerName)
 		scheduler.GetScheduler().RemoveSchedules(namespacedName)
 
 		return s.updateSchedule()
@@ -60,8 +60,8 @@ func (s *ScheduleHandler) Handle() error {
 
 	s.SetConditionTrue(k8upv1alpha1.ConditionReady, k8upv1alpha1.ReasonReady)
 
-	if !controllerutil.ContainsFinalizer(s.schedule, scheduleFinalizerName) {
-		controllerutil.AddFinalizer(s.schedule, scheduleFinalizerName)
+	if !controllerutil.ContainsFinalizer(s.schedule, k8upv1alpha1.ScheduleFinalizerName) {
+		controllerutil.AddFinalizer(s.schedule, k8upv1alpha1.ScheduleFinalizerName)
 		return s.updateSchedule()
 	}
 
@@ -94,7 +94,7 @@ func (s *ScheduleHandler) createJobList() scheduler.JobList {
 			Object:   backupTemplate.BackupSpec,
 		})
 	}
-	if check := s.schedule.Spec.Check; check != nil {
+	if check := s.schedule.Spec.Check; check != nil && !check.Schedule.IsRandom() {
 		checkTemplate := check.DeepCopy()
 		s.mergeWithDefaults(&checkTemplate.RunnableSpec)
 		jobType := k8upv1alpha1.CheckType
@@ -114,7 +114,7 @@ func (s *ScheduleHandler) createJobList() scheduler.JobList {
 			Object:   restoreTemplate.RestoreSpec,
 		})
 	}
-	if prune := s.schedule.Spec.Prune; prune != nil {
+	if prune := s.schedule.Spec.Prune; prune != nil && !prune.Schedule.IsRandom() {
 		pruneTemplate := prune.DeepCopy()
 		s.mergeWithDefaults(&pruneTemplate.RunnableSpec)
 		jobType := k8upv1alpha1.PruneType
@@ -172,11 +172,25 @@ func (s *ScheduleHandler) updateStatus() error {
 	return nil
 }
 
-func (s *ScheduleHandler) getEffectiveSchedule(jobType k8upv1alpha1.JobType, originalSchedule k8upv1alpha1.ScheduleDefinition) k8upv1alpha1.ScheduleDefinition {
-	if s.schedule.Status.EffectiveSchedules == nil {
-		s.schedule.Status.EffectiveSchedules = make(map[k8upv1alpha1.JobType]k8upv1alpha1.ScheduleDefinition)
+func (s *ScheduleHandler) fetchEffectiveScheduleResource() error {
+	list := &k8upv1alpha1.EffectiveScheduleList{}
+	err := s.Client.List(s.CTX, list, client.InNamespace(cfg.Config.OperatorNamespace))
+	if err != nil {
+		return err
 	}
-	if existingSchedule, found := s.schedule.Status.EffectiveSchedules[jobType]; found {
+	for _, schedule := range list.Items {
+		for _, jobRef := range schedule.Spec.EffectiveSchedules {
+			if s.isReferencedBy(jobRef) {
+				s.effectiveSchedule = &schedule
+			}
+		}
+	}
+	return nil
+}
+
+func (s *ScheduleHandler) getEffectiveSchedule(jobType k8upv1alpha1.JobType, originalSchedule k8upv1alpha1.ScheduleDefinition) k8upv1alpha1.ScheduleDefinition {
+
+	if existingSchedule, found := s.findExistingSchedule(jobType); found {
 		return existingSchedule
 	}
 
@@ -185,7 +199,7 @@ func (s *ScheduleHandler) getEffectiveSchedule(jobType k8upv1alpha1.JobType, ori
 		return originalSchedule
 	}
 
-	randomizedSchedule, err := s.getRandomSchedule(jobType, originalSchedule)
+	randomizedSchedule, err := s.createRandomSchedule(jobType, originalSchedule)
 	if err != nil {
 		s.Log.Info("Could not randomize schedule, continuing with original schedule", "schedule", originalSchedule, "error", err.Error())
 		return originalSchedule
@@ -194,7 +208,22 @@ func (s *ScheduleHandler) getEffectiveSchedule(jobType k8upv1alpha1.JobType, ori
 	return randomizedSchedule
 }
 
-func (s *ScheduleHandler) getRandomSchedule(jobType k8upv1alpha1.JobType, originalSchedule k8upv1alpha1.ScheduleDefinition) (k8upv1alpha1.ScheduleDefinition, error) {
+func (s *ScheduleHandler) findExistingSchedule(jobType k8upv1alpha1.JobType) (k8upv1alpha1.ScheduleDefinition, bool) {
+	if s.effectiveSchedule == nil {
+		return "", false
+	}
+	for _, ref := range s.effectiveSchedule.Spec.EffectiveSchedules {
+		if !s.isReferencedBy(ref) {
+			continue
+		}
+		if ref.JobType == jobType {
+			return ref.Schedule, true
+		}
+	}
+	return "", false
+}
+
+func (s *ScheduleHandler) createRandomSchedule(jobType k8upv1alpha1.JobType, originalSchedule k8upv1alpha1.ScheduleDefinition) (k8upv1alpha1.ScheduleDefinition, error) {
 	seed := s.createSeed(s.schedule, jobType)
 	randomizedSchedule, err := randomizeSchedule(seed, originalSchedule)
 	if err != nil {
@@ -206,6 +235,48 @@ func (s *ScheduleHandler) getRandomSchedule(jobType k8upv1alpha1.JobType, origin
 }
 
 func (s *ScheduleHandler) setEffectiveSchedule(jobType k8upv1alpha1.JobType, schedule k8upv1alpha1.ScheduleDefinition) {
-	s.schedule.Status.EffectiveSchedules[jobType] = schedule
+	if s.effectiveSchedule == nil {
+		s.createNewEffectiveScheduleObj()
+	}
+	schedules := s.effectiveSchedule.Spec.EffectiveSchedules
+	schedules = append(schedules, k8upv1alpha1.JobRef{
+		Name:      s.schedule.Name,
+		Namespace: s.schedule.Namespace,
+		JobType:   jobType,
+		Schedule:  schedule,
+	})
+	s.effectiveSchedule.Spec.EffectiveSchedules = schedules
+	s.updateEffectiveSchedule()
 	s.requireStatusUpdate = true
+}
+
+func (s *ScheduleHandler) createNewEffectiveScheduleObj() {
+	newSchedule := &k8upv1alpha1.EffectiveSchedule{
+		ObjectMeta: metav1.ObjectMeta{
+			Namespace: cfg.Config.OperatorNamespace,
+			Name:      rand.String(32),
+		},
+	}
+	err := s.Client.Create(s.CTX, newSchedule)
+	if err != nil && errors.IsAlreadyExists(err) {
+		s.Log.Error(err, "could not persist effective schedules", "name", newSchedule.Name)
+		// TODO: Add a status condition that says effective schedules aren't persisted
+	}
+	// TODO: Add a status condition with a message that contains name of the effective schedule
+	s.requireStatusUpdate = true
+}
+
+func (s *ScheduleHandler) isReferencedBy(ref k8upv1alpha1.JobRef) bool {
+	return ref.Namespace == s.schedule.Namespace && ref.Name == s.schedule.Name
+}
+
+func (s *ScheduleHandler) updateEffectiveSchedule() {
+	if s.effectiveSchedule == nil {
+		return
+	}
+	err := s.Client.Update(s.CTX, s.effectiveSchedule)
+	if err != nil && !errors.IsNotFound(err) {
+		s.Log.Error(err, "could not update effective schedules", "name", s.effectiveSchedule.Name)
+		// TODO: Add/Update status condition that says effective schedules aren't persisted/updated
+	}
 }
