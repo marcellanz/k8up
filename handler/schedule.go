@@ -51,13 +51,13 @@ func (s *ScheduleHandler) Handle() error {
 
 	jobList := s.createJobList()
 
-	scheduler.GetScheduler().RemoveSchedules(namespacedName)
 	err = scheduler.GetScheduler().SyncSchedules(jobList)
 	if err != nil {
 		s.SetConditionFalseWithMessage(k8upv1alpha1.ConditionReady, k8upv1alpha1.ReasonFailed, "cannot add to cron: %v", err.Error())
 		return s.updateStatus()
 	}
 
+	s.updateEffectiveSchedule()
 	s.SetConditionTrue(k8upv1alpha1.ConditionReady, k8upv1alpha1.ReasonReady)
 
 	if !controllerutil.ContainsFinalizer(s.schedule, k8upv1alpha1.ScheduleFinalizerName) {
@@ -83,6 +83,9 @@ func (s *ScheduleHandler) createJobList() scheduler.JobList {
 			Schedule: s.getEffectiveSchedule(jobType, jobTemplate.Schedule),
 			Object:   jobTemplate.ArchiveSpec,
 		})
+		s.cleanupEffectiveSchedules(jobType, jobTemplate.Schedule)
+	} else {
+		s.cleanupEffectiveSchedules(k8upv1alpha1.ArchiveType, "")
 	}
 	if backup := s.schedule.Spec.Backup; backup != nil {
 		backupTemplate := backup.DeepCopy()
@@ -93,8 +96,11 @@ func (s *ScheduleHandler) createJobList() scheduler.JobList {
 			Schedule: s.getEffectiveSchedule(jobType, backupTemplate.Schedule),
 			Object:   backupTemplate.BackupSpec,
 		})
+		s.cleanupEffectiveSchedules(jobType, backupTemplate.Schedule)
+	} else {
+		s.cleanupEffectiveSchedules(k8upv1alpha1.BackupType, "")
 	}
-	if check := s.schedule.Spec.Check; check != nil && !check.Schedule.IsRandom() {
+	if check := s.schedule.Spec.Check; check != nil {
 		checkTemplate := check.DeepCopy()
 		s.mergeWithDefaults(&checkTemplate.RunnableSpec)
 		jobType := k8upv1alpha1.CheckType
@@ -103,6 +109,9 @@ func (s *ScheduleHandler) createJobList() scheduler.JobList {
 			Schedule: s.getEffectiveSchedule(jobType, checkTemplate.Schedule),
 			Object:   checkTemplate.CheckSpec,
 		})
+		s.cleanupEffectiveSchedules(jobType, checkTemplate.Schedule)
+	} else {
+		s.cleanupEffectiveSchedules(k8upv1alpha1.CheckType, "")
 	}
 	if restore := s.schedule.Spec.Restore; restore != nil {
 		restoreTemplate := restore.DeepCopy()
@@ -113,8 +122,11 @@ func (s *ScheduleHandler) createJobList() scheduler.JobList {
 			Schedule: s.getEffectiveSchedule(jobType, restoreTemplate.Schedule),
 			Object:   restoreTemplate.RestoreSpec,
 		})
+		s.cleanupEffectiveSchedules(jobType, restoreTemplate.Schedule)
+	} else {
+		s.cleanupEffectiveSchedules(k8upv1alpha1.RestoreType, "")
 	}
-	if prune := s.schedule.Spec.Prune; prune != nil && !prune.Schedule.IsRandom() {
+	if prune := s.schedule.Spec.Prune; prune != nil {
 		pruneTemplate := prune.DeepCopy()
 		s.mergeWithDefaults(&pruneTemplate.RunnableSpec)
 		jobType := k8upv1alpha1.PruneType
@@ -123,6 +135,9 @@ func (s *ScheduleHandler) createJobList() scheduler.JobList {
 			Schedule: s.getEffectiveSchedule(jobType, pruneTemplate.Schedule),
 			Object:   pruneTemplate.PruneSpec,
 		})
+		s.cleanupEffectiveSchedules(jobType, pruneTemplate.Schedule)
+	} else {
+		s.cleanupEffectiveSchedules(k8upv1alpha1.PruneType, "")
 	}
 
 	return jobList
@@ -230,7 +245,6 @@ func (s *ScheduleHandler) setEffectiveSchedule(jobType k8upv1alpha1.JobType, sch
 		Schedule:  schedule,
 	})
 	s.effectiveSchedule.Spec.EffectiveSchedules = schedules
-	s.updateEffectiveSchedule()
 	s.requireStatusUpdate = true
 }
 
@@ -243,21 +257,55 @@ func (s *ScheduleHandler) createNewEffectiveScheduleObj() {
 	}
 	s.Log.Info("Creating new EffectiveSchedule", "name", k8upv1alpha1.GetNamespacedName(newSchedule))
 	err := s.Client.Create(s.CTX, newSchedule)
-	if err != nil && errors.IsAlreadyExists(err) {
+	if err != nil && !errors.IsAlreadyExists(err) {
 		s.Log.Error(err, "could not persist effective schedules", "name", newSchedule.Name)
 		// TODO: Add a status condition that says effective schedules aren't persisted
 	}
 	// TODO: Add a status condition with a message that contains name of the effective schedule
 	s.requireStatusUpdate = true
+	s.effectiveSchedule = newSchedule
 }
 
 func (s *ScheduleHandler) updateEffectiveSchedule() {
 	if s.effectiveSchedule == nil {
 		return
 	}
+	if len(s.effectiveSchedule.Spec.EffectiveSchedules) <= 0 {
+		s.deleteEffectiveSchedule()
+		return
+	}
 	err := s.Client.Update(s.CTX, s.effectiveSchedule)
 	if err != nil && !errors.IsNotFound(err) {
 		s.Log.Error(err, "could not update effective schedules", "name", s.effectiveSchedule.Name)
 		// TODO: Add/Update status condition that says effective schedules aren't persisted/updated
+	}
+}
+
+// cleanupEffectiveSchedules removes elements in the EffectiveSchedule list that match the jobtype, but aren't randomized.
+// This is needed in case the schedule spec has changed from randomized to standard cron syntax.
+func (s *ScheduleHandler) cleanupEffectiveSchedules(jobType k8upv1alpha1.JobType, newSchedule k8upv1alpha1.ScheduleDefinition) {
+	if s.effectiveSchedule == nil {
+		return
+	}
+	var schedules []k8upv1alpha1.JobRef
+	for _, ref := range s.effectiveSchedule.Spec.EffectiveSchedules {
+		if s.schedule.IsReferencedBy(ref) && ref.JobType == jobType && !newSchedule.IsRandom() {
+			s.Log.V(1).Info("cleaning out from effective schedule", "type", jobType, "name", k8upv1alpha1.GetNamespacedName(s.schedule))
+			continue
+		}
+		schedules = append(schedules, ref)
+	}
+	s.effectiveSchedule.Spec.EffectiveSchedules = schedules
+}
+
+func (s *ScheduleHandler) deleteEffectiveSchedule() {
+	if s.effectiveSchedule == nil {
+		return
+	}
+	s.Log.Info("deleting effective schedule", "name", k8upv1alpha1.GetNamespacedName(s.effectiveSchedule))
+	err := s.Client.Delete(s.CTX, s.effectiveSchedule)
+	if err != nil {
+		s.Log.Info("could not delete effective schedule", "error", err.Error())
+		// TODO: maybe add a condition?
 	}
 }

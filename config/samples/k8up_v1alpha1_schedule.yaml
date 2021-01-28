@@ -37,7 +37,7 @@ spec:
           name: backup-credentials
           key: password
   backup:
-    schedule: '* * * * *'
+    schedule: '@hourly-random'
     keepJobs: 4
     promURL: http://10.144.1.224:9000
     resources:

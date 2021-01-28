@@ -7,6 +7,9 @@ import (
 type (
 	// +kubebuilder:object:root=true
 	// +kubebuilder:subresource:status
+	// +kubebuilder:printcolumn:name="Schedule Namespace",type="string",JSONPath=`.spec.effectiveSchedules[0].namespace`,description="Schedule Namespace"
+	// +kubebuilder:printcolumn:name="Schedule Name",type="string",JSONPath=`.spec.effectiveSchedules[0].name`,description="Schedule Name"
+	// +kubebuilder:printcolumn:name="Age",type="date",JSONPath=".metadata.creationTimestamp"
 
 	// EffectiveSchedule is the Schema to persist schedules generated from Randomized schedules.
 	EffectiveSchedule struct {
@@ -49,10 +52,6 @@ type (
 		// resources without needing to understand resource-specific status details.
 		Conditions []metav1.Condition `json:"conditions,omitempty"`
 	}
-)
-
-const (
-	EffectiveScheduleFinalizer = "k8up.syn.tools/effective-schedule"
 )
 
 func init() {

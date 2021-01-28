@@ -27,6 +27,9 @@ type ScheduleReconciler struct {
 
 // +kubebuilder:rbac:groups=backup.appuio.ch,resources=schedules,verbs=get;list;watch;create;update;patch;delete
 // +kubebuilder:rbac:groups=backup.appuio.ch,resources=schedules/status,verbs=get;update;patch
+// +kubebuilder:rbac:groups=backup.appuio.ch,resources=effectiveschedules,verbs=get;list;watch;create;update;patch;delete
+// +kubebuilder:rbac:groups=backup.appuio.ch,resources=effectiveschedules/status,verbs=get;update;patch
+// +kubebuilder:rbac:groups=backup.appuio.ch,resources=effectiveschedules/finalizers,verbs=update
 
 // Reconcile is the entrypoint to manage the given resource.
 func (r *ScheduleReconciler) Reconcile(ctx context.Context, req ctrl.Request) (ctrl.Result, error) {
@@ -71,6 +74,9 @@ func (s *ScheduleReconciler) fetchEffectiveScheduleResource(ctx context.Context,
 		return nil, err
 	}
 	for _, effectiveSchedule := range list.Items {
+		if effectiveSchedule.GetDeletionTimestamp() != nil {
+			continue
+		}
 		for _, jobRef := range effectiveSchedule.Spec.EffectiveSchedules {
 			if schedule.IsReferencedBy(jobRef) {
 				return &effectiveSchedule, nil

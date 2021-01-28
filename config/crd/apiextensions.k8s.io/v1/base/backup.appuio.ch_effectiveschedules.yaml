@@ -16,7 +16,19 @@ spec:
     singular: effectiveschedule
   scope: Namespaced
   versions:
-  - name: v1alpha1
+  - additionalPrinterColumns:
+    - description: Schedule Namespace
+      jsonPath: .spec.effectiveSchedules[0].namespace
+      name: Schedule Namespace
+      type: string
+    - description: Schedule Name
+      jsonPath: .spec.effectiveSchedules[0].name
+      name: Schedule Name
+      type: string
+    - jsonPath: .metadata.creationTimestamp
+      name: Age
+      type: date
+    name: v1alpha1
     schema:
       openAPIV3Schema:
         description: EffectiveSchedule is the Schema to persist schedules generated from Randomized schedules.
