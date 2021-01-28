@@ -2,6 +2,7 @@ package controllers
 
 import (
 	"context"
+	"fmt"
 
 	"github.com/go-logr/logr"
 	apierrors "k8s.io/apimachinery/pkg/api/errors"
@@ -12,6 +13,7 @@ import (
 	"sigs.k8s.io/controller-runtime/pkg/controller/controllerutil"
 
 	k8upv1alpha1 "github.com/vshn/k8up/api/v1alpha1"
+	"github.com/vshn/k8up/cfg"
 	"github.com/vshn/k8up/job"
 	"github.com/vshn/k8up/scheduler"
 )
@@ -59,9 +61,11 @@ func (r *EffectiveScheduleReconciler) Reconcile(ctx context.Context, req ctrl.Re
 		return ctrl.Result{}, err
 	}
 
-	if len(rc.EffectiveSchedule.Spec.EffectiveSchedules) > 0 {
-		scheduler.GetScheduler().SyncSchedules(r.createJobList(rc))
+	list, err := r.createJobList(rc)
+	if err != nil {
+		return ctrl.Result{}, err
 	}
+	scheduler.GetScheduler().SyncSchedules(list)
 
 	return ctrl.Result{}, err
 }
@@ -73,23 +77,29 @@ func (r *EffectiveScheduleReconciler) SetupWithManager(mgr ctrl.Manager) error {
 		Complete(r)
 }
 
-func (r *EffectiveScheduleReconciler) createJobList(rc EffectiveScheduleReconciliationContext) scheduler.JobList {
+func (r *EffectiveScheduleReconciler) createJobList(rc EffectiveScheduleReconciliationContext) (scheduler.JobList, error) {
+	list := scheduler.JobList{}
 
-
-	list := scheduler.JobList{
-		Config: job.NewConfig(rc.Ctx, r.Client, r.Log, rc.EffectiveSchedule, r.Scheme, ""),
+	if len(rc.EffectiveSchedule.Spec.EffectiveSchedules) <= 0 {
+		return list, fmt.Errorf("no schedules found")
 	}
 
+	ref := rc.EffectiveSchedule.Spec.EffectiveSchedules[0]
+	scheduleSpec := &k8upv1alpha1.Schedule{}
+	err := r.Client.Get(rc.Ctx, types.NamespacedName{Name: ref.Name, Namespace: ref.Namespace}, scheduleSpec)
+	if err != nil {
+		r.Log.Info("schedule not found", "error", err.Error())
+		return list, err
+	}
+
+	repository := cfg.GetGlobalRepository()
+	if scheduleSpec.Spec.Backend != nil {
+		repository = scheduleSpec.Spec.Backend.String()
+	}
+	list.Config = job.NewConfig(rc.Ctx, r.Client, r.Log, scheduleSpec, r.Scheme, repository)
 
 	for _, ref := range rc.EffectiveSchedule.Spec.EffectiveSchedules {
-		scheduleSpec := &k8upv1alpha1.Schedule{}
-		err := r.Client.Get(rc.Ctx, types.NamespacedName{Name: ref.Name, Namespace: ref.Namespace}, scheduleSpec)
-		if err != nil {
-			r.Log.Info("schedule not found", "error", err.Error())
-			continue
-		}
 		var obj scheduler.ObjectCreator
-
 		switch ref.JobType {
 		case k8upv1alpha1.PruneType:
 			obj = scheduleSpec.Spec.Prune
@@ -99,10 +109,10 @@ func (r *EffectiveScheduleReconciler) createJobList(rc EffectiveScheduleReconcil
 			continue
 		}
 		list.Jobs = append(list.Jobs, scheduler.Job{
-			JobType: ref.JobType,
+			JobType:  ref.JobType,
 			Schedule: ref.Schedule,
-			Object: obj,
+			Object:   obj,
 		})
 	}
-	return list
+	return list, fmt.Errorf("no schedules found")
 }

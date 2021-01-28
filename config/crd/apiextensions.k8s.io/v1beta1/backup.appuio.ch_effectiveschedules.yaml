@@ -32,216 +32,23 @@ spec:
         spec:
           description: EffectiveScheduleSpec defines the desired state of EffectiveSchedule
           properties:
-            backend:
-              description: Backend contains the restic repo where the job should backup to.
-              properties:
-                azure:
-                  properties:
-                    accountKeySecretRef:
-                      description: SecretKeySelector selects a key of a Secret.
-                      properties:
-                        key:
-                          description: The key of the secret to select from.  Must be a valid secret key.
-                          type: string
-                        name:
-                          description: 'Name of the referent. More info: https://kubernetes.io/docs/concepts/overview/working-with-objects/names/#names TODO: Add other useful fields. apiVersion, kind, uid?'
-                          type: string
-                        optional:
-                          description: Specify whether the Secret or its key must be defined
-                          type: boolean
-                      required:
-                      - key
-                      type: object
-                    accountNameSecretRef:
-                      description: SecretKeySelector selects a key of a Secret.
-                      properties:
-                        key:
-                          description: The key of the secret to select from.  Must be a valid secret key.
-                          type: string
-                        name:
-                          description: 'Name of the referent. More info: https://kubernetes.io/docs/concepts/overview/working-with-objects/names/#names TODO: Add other useful fields. apiVersion, kind, uid?'
-                          type: string
-                        optional:
-                          description: Specify whether the Secret or its key must be defined
-                          type: boolean
-                      required:
-                      - key
-                      type: object
-                    container:
-                      type: string
-                  type: object
-                b2:
-                  properties:
-                    accountIDSecretRef:
-                      description: SecretKeySelector selects a key of a Secret.
-                      properties:
-                        key:
-                          description: The key of the secret to select from.  Must be a valid secret key.
-                          type: string
-                        name:
-                          description: 'Name of the referent. More info: https://kubernetes.io/docs/concepts/overview/working-with-objects/names/#names TODO: Add other useful fields. apiVersion, kind, uid?'
-                          type: string
-                        optional:
-                          description: Specify whether the Secret or its key must be defined
-                          type: boolean
-                      required:
-                      - key
-                      type: object
-                    accountKeySecretRef:
-                      description: SecretKeySelector selects a key of a Secret.
-                      properties:
-                        key:
-                          description: The key of the secret to select from.  Must be a valid secret key.
-                          type: string
-                        name:
-                          description: 'Name of the referent. More info: https://kubernetes.io/docs/concepts/overview/working-with-objects/names/#names TODO: Add other useful fields. apiVersion, kind, uid?'
-                          type: string
-                        optional:
-                          description: Specify whether the Secret or its key must be defined
-                          type: boolean
-                      required:
-                      - key
-                      type: object
-                    bucket:
-                      type: string
-                    path:
-                      type: string
-                  type: object
-                gcs:
-                  properties:
-                    accessTokenSecretRef:
-                      description: SecretKeySelector selects a key of a Secret.
-                      properties:
-                        key:
-                          description: The key of the secret to select from.  Must be a valid secret key.
-                          type: string
-                        name:
-                          description: 'Name of the referent. More info: https://kubernetes.io/docs/concepts/overview/working-with-objects/names/#names TODO: Add other useful fields. apiVersion, kind, uid?'
-                          type: string
-                        optional:
-                          description: Specify whether the Secret or its key must be defined
-                          type: boolean
-                      required:
-                      - key
-                      type: object
-                    bucket:
-                      type: string
-                    projectIDSecretRef:
-                      description: SecretKeySelector selects a key of a Secret.
-                      properties:
-                        key:
-                          description: The key of the secret to select from.  Must be a valid secret key.
-                          type: string
-                        name:
-                          description: 'Name of the referent. More info: https://kubernetes.io/docs/concepts/overview/working-with-objects/names/#names TODO: Add other useful fields. apiVersion, kind, uid?'
-                          type: string
-                        optional:
-                          description: Specify whether the Secret or its key must be defined
-                          type: boolean
-                      required:
-                      - key
-                      type: object
-                  type: object
-                local:
-                  properties:
-                    mountPath:
-                      type: string
-                  type: object
-                repoPasswordSecretRef:
-                  description: RepoPasswordSecretRef references a secret key to look up the restic repository password
-                  properties:
-                    key:
-                      description: The key of the secret to select from.  Must be a valid secret key.
-                      type: string
-                    name:
-                      description: 'Name of the referent. More info: https://kubernetes.io/docs/concepts/overview/working-with-objects/names/#names TODO: Add other useful fields. apiVersion, kind, uid?'
-                      type: string
-                    optional:
-                      description: Specify whether the Secret or its key must be defined
-                      type: boolean
-                  required:
-                  - key
-                  type: object
-                rest:
-                  properties:
-                    passwordSecretReg:
-                      description: SecretKeySelector selects a key of a Secret.
-                      properties:
-                        key:
-                          description: The key of the secret to select from.  Must be a valid secret key.
-                          type: string
-                        name:
-                          description: 'Name of the referent. More info: https://kubernetes.io/docs/concepts/overview/working-with-objects/names/#names TODO: Add other useful fields. apiVersion, kind, uid?'
-                          type: string
-                        optional:
-                          description: Specify whether the Secret or its key must be defined
-                          type: boolean
-                      required:
-                      - key
-                      type: object
-                    url:
-                      type: string
-                    userSecretRef:
-                      description: SecretKeySelector selects a key of a Secret.
-                      properties:
-                        key:
-                          description: The key of the secret to select from.  Must be a valid secret key.
-                          type: string
-                        name:
-                          description: 'Name of the referent. More info: https://kubernetes.io/docs/concepts/overview/working-with-objects/names/#names TODO: Add other useful fields. apiVersion, kind, uid?'
-                          type: string
-                        optional:
-                          description: Specify whether the Secret or its key must be defined
-                          type: boolean
-                      required:
-                      - key
-                      type: object
-                  type: object
-                s3:
-                  properties:
-                    accessKeyIDSecretRef:
-                      description: SecretKeySelector selects a key of a Secret.
-                      properties:
-                        key:
-                          description: The key of the secret to select from.  Must be a valid secret key.
-                          type: string
-                        name:
-                          description: 'Name of the referent. More info: https://kubernetes.io/docs/concepts/overview/working-with-objects/names/#names TODO: Add other useful fields. apiVersion, kind, uid?'
-                          type: string
-                        optional:
-                          description: Specify whether the Secret or its key must be defined
-                          type: boolean
-                      required:
-                      - key
-                      type: object
-                    bucket:
-                      type: string
-                    endpoint:
-                      type: string
-                    secretAccessKeySecretRef:
-                      description: SecretKeySelector selects a key of a Secret.
-                      properties:
-                        key:
-                          description: The key of the secret to select from.  Must be a valid secret key.
-                          type: string
-                        name:
-                          description: 'Name of the referent. More info: https://kubernetes.io/docs/concepts/overview/working-with-objects/names/#names TODO: Add other useful fields. apiVersion, kind, uid?'
-                          type: string
-                        optional:
-                          description: Specify whether the Secret or its key must be defined
-                          type: boolean
-                      required:
-                      - key
-                      type: object
-                  type: object
-                swift:
-                  properties:
-                    container:
-                      type: string
-                    path:
-                      type: string
-                  type: object
-              type: object
+            effectiveSchedules:
+              description: EffectiveSchedules holds a list of effective schedules. The list may omit entries that aren't generated from smart schedules.
+              items:
+                description: JobRef represents a reference to a job in a Schedule object
+                properties:
+                  jobType:
+                    description: JobType defines what job type this is.
+                    type: string
+                  name:
+                    type: string
+                  namespace:
+                    type: string
+                  schedule:
+                    description: ScheduleDefinition is the actual cron-type expression that defines the interval of the actions.
+                    type: string
+                type: object
+              type: array
           type: object
         status:
           description: EffectiveScheduleStatus defines the observed state of EffectiveSchedule
@@ -288,19 +95,6 @@ spec:
                 - reason
                 - status
                 - type
-                type: object
-              type: array
-            effectiveSchedules:
-              description: EffectiveSchedules holds a list of effective schedules. The list may omit entries that aren't generated from smart schedules.
-              items:
-                description: JobRef represents a reference to a job specified in a Schedule
-                properties:
-                  jobType:
-                    description: JobType defines what job type this is.
-                    type: string
-                  schedule:
-                    description: ScheduleDefinition is the actual cron-type expression that defines the interval of the actions.
-                    type: string
                 type: object
               type: array
           type: object

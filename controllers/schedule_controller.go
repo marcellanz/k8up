@@ -2,6 +2,7 @@ package controllers
 
 import (
 	"context"
+	"time"
 
 	"github.com/go-logr/logr"
 	"k8s.io/apimachinery/pkg/api/errors"
@@ -41,13 +42,19 @@ func (r *ScheduleReconciler) Reconcile(ctx context.Context, req ctrl.Request) (c
 		return reconcile.Result{}, err
 	}
 
+	effectiveSchedule, err := r.fetchEffectiveScheduleResource(ctx, schedule)
+	if err != nil {
+		r.Log.Info("could not retrieve list of effective schedules, try later again", "error", err.Error())
+		return ctrl.Result{Requeue: true, RequeueAfter: 60 * time.Minute}, err
+	}
+
 	repository := cfg.GetGlobalRepository()
 	if schedule.Spec.Backend != nil {
 		repository = schedule.Spec.Backend.String()
 	}
 	config := job.NewConfig(ctx, r.Client, log, schedule, r.Scheme, repository)
 
-	return ctrl.Result{}, handler.NewScheduleHandler(config, schedule).Handle()
+	return ctrl.Result{}, handler.NewScheduleHandler(config, schedule, effectiveSchedule).Handle()
 }
 
 func (r *ScheduleReconciler) SetupWithManager(mgr ctrl.Manager) error {
@@ -55,4 +62,20 @@ func (r *ScheduleReconciler) SetupWithManager(mgr ctrl.Manager) error {
 		For(&k8upv1alpha1.Schedule{}).
 		WithEventFilter(predicate.GenerationChangedPredicate{}).
 		Complete(r)
+}
+
+func (s *ScheduleReconciler) fetchEffectiveScheduleResource(ctx context.Context, schedule *k8upv1alpha1.Schedule) (*k8upv1alpha1.EffectiveSchedule, error) {
+	list := &k8upv1alpha1.EffectiveScheduleList{}
+	err := s.Client.List(ctx, list, client.InNamespace(cfg.Config.OperatorNamespace))
+	if err != nil {
+		return nil, err
+	}
+	for _, effectiveSchedule := range list.Items {
+		for _, jobRef := range effectiveSchedule.Spec.EffectiveSchedules {
+			if schedule.IsReferencedBy(jobRef) {
+				return &effectiveSchedule, nil
+			}
+		}
+	}
+	return nil, nil
 }

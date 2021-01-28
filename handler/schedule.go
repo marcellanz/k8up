@@ -8,7 +8,6 @@ import (
 	metav1 "k8s.io/apimachinery/pkg/apis/meta/v1"
 	"k8s.io/apimachinery/pkg/types"
 	"k8s.io/apimachinery/pkg/util/rand"
-	"sigs.k8s.io/controller-runtime/pkg/client"
 	"sigs.k8s.io/controller-runtime/pkg/controller/controllerutil"
 
 	k8upv1alpha1 "github.com/vshn/k8up/api/v1alpha1"
@@ -27,10 +26,11 @@ type ScheduleHandler struct {
 }
 
 // NewScheduleHandler will return a new ScheduleHandler.
-func NewScheduleHandler(config job.Config, schedule *k8upv1alpha1.Schedule) *ScheduleHandler {
+func NewScheduleHandler(config job.Config, schedule *k8upv1alpha1.Schedule, effectiveSchedule *k8upv1alpha1.EffectiveSchedule) *ScheduleHandler {
 	return &ScheduleHandler{
-		schedule: schedule,
-		Config:   config,
+		schedule:          schedule,
+		effectiveSchedule: effectiveSchedule,
+		Config:            config,
 	}
 }
 
@@ -172,22 +172,6 @@ func (s *ScheduleHandler) updateStatus() error {
 	return nil
 }
 
-func (s *ScheduleHandler) fetchEffectiveScheduleResource() error {
-	list := &k8upv1alpha1.EffectiveScheduleList{}
-	err := s.Client.List(s.CTX, list, client.InNamespace(cfg.Config.OperatorNamespace))
-	if err != nil {
-		return err
-	}
-	for _, schedule := range list.Items {
-		for _, jobRef := range schedule.Spec.EffectiveSchedules {
-			if s.isReferencedBy(jobRef) {
-				s.effectiveSchedule = &schedule
-			}
-		}
-	}
-	return nil
-}
-
 func (s *ScheduleHandler) getEffectiveSchedule(jobType k8upv1alpha1.JobType, originalSchedule k8upv1alpha1.ScheduleDefinition) k8upv1alpha1.ScheduleDefinition {
 
 	if existingSchedule, found := s.findExistingSchedule(jobType); found {
@@ -213,7 +197,7 @@ func (s *ScheduleHandler) findExistingSchedule(jobType k8upv1alpha1.JobType) (k8
 		return "", false
 	}
 	for _, ref := range s.effectiveSchedule.Spec.EffectiveSchedules {
-		if !s.isReferencedBy(ref) {
+		if !s.schedule.IsReferencedBy(ref) {
 			continue
 		}
 		if ref.JobType == jobType {
@@ -257,6 +241,7 @@ func (s *ScheduleHandler) createNewEffectiveScheduleObj() {
 			Name:      rand.String(32),
 		},
 	}
+	s.Log.Info("Creating new EffectiveSchedule", "name", k8upv1alpha1.GetNamespacedName(newSchedule))
 	err := s.Client.Create(s.CTX, newSchedule)
 	if err != nil && errors.IsAlreadyExists(err) {
 		s.Log.Error(err, "could not persist effective schedules", "name", newSchedule.Name)
@@ -264,10 +249,6 @@ func (s *ScheduleHandler) createNewEffectiveScheduleObj() {
 	}
 	// TODO: Add a status condition with a message that contains name of the effective schedule
 	s.requireStatusUpdate = true
-}
-
-func (s *ScheduleHandler) isReferencedBy(ref k8upv1alpha1.JobRef) bool {
-	return ref.Namespace == s.schedule.Namespace && ref.Name == s.schedule.Name
 }
 
 func (s *ScheduleHandler) updateEffectiveSchedule() {

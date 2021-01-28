@@ -29,7 +29,6 @@ type (
 	// EffectiveScheduleSpec defines the desired state of EffectiveSchedule
 	EffectiveScheduleSpec struct {
 
-
 		// EffectiveSchedules holds a list of effective schedules. The list may omit entries that aren't generated from
 		// smart schedules.
 		EffectiveSchedules []JobRef `json:"effectiveSchedules,omitempty"`

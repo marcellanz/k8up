@@ -141,3 +141,7 @@ func (s ScheduleDefinition) IsNonStandard() bool {
 func (s ScheduleDefinition) IsRandom() bool {
 	return s.IsNonStandard() && strings.HasSuffix(string(s), "-random")
 }
+
+func (s *Schedule) IsReferencedBy(ref JobRef) bool {
+	return ref.Namespace == s.Namespace && ref.Name == s.Name
+}

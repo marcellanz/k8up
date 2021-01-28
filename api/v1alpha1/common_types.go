@@ -1,6 +1,8 @@
 package v1alpha1
 
 import (
+	"fmt"
+
 	metav1 "k8s.io/apimachinery/pkg/apis/meta/v1"
 )
 
@@ -67,6 +69,11 @@ func (c ConditionType) String() string {
 // "r.String()" and "string(r)" are equivalent.
 func (r ConditionReason) String() string {
 	return string(r)
+}
+
+// Gets the resource name in the form of <namespace>/<name>
+func GetNamespacedName(obj metav1.Object) string {
+	return fmt.Sprintf("%s/%s", obj.GetNamespace(), obj.GetName())
 }
 
 // Status defines the observed state of a generic K8up job. It is used for the
