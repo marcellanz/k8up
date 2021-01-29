@@ -30,8 +30,6 @@ func Test_Restore(t *testing.T) {
 }
 
 func (r *RestoreTestSuite) TestReconciliation() {
-	r.NS = r.SanitizeNameForNS(r.T().Name())
-	r.Require().NoError(r.CreateNS(r.NS))
 	r.givenRestoreResource()
 
 	result := r.whenReconcile()

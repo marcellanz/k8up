@@ -58,7 +58,6 @@ func (s *ScheduleHandler) Handle() error {
 	}
 
 	s.updateEffectiveSchedule()
-	s.SetConditionTrue(k8upv1alpha1.ConditionReady, k8upv1alpha1.ReasonReady)
 
 	if !controllerutil.ContainsFinalizer(s.schedule, k8upv1alpha1.ScheduleFinalizerName) {
 		controllerutil.AddFinalizer(s.schedule, k8upv1alpha1.ScheduleFinalizerName)
@@ -255,15 +254,16 @@ func (s *ScheduleHandler) createNewEffectiveScheduleObj() {
 			Name:      rand.String(32),
 		},
 	}
+	s.requireStatusUpdate = true
 	s.Log.Info("Creating new EffectiveSchedule", "name", k8upv1alpha1.GetNamespacedName(newSchedule))
 	err := s.Client.Create(s.CTX, newSchedule)
 	if err != nil && !errors.IsAlreadyExists(err) {
 		s.Log.Error(err, "could not persist effective schedules", "name", newSchedule.Name)
-		// TODO: Add a status condition that says effective schedules aren't persisted
+		s.SetConditionFalseWithMessage(k8upv1alpha1.ConditionReady, k8upv1alpha1.ReasonCreationFailed, "could not persist effective schedules: %s", err.Error())
+	} else {
+		s.SetConditionTrueWithMessage(k8upv1alpha1.ConditionReady, k8upv1alpha1.ReasonReady, "effective schedule created: '%s'", k8upv1alpha1.GetNamespacedName(newSchedule))
+		s.effectiveSchedule = newSchedule
 	}
-	// TODO: Add a status condition with a message that contains name of the effective schedule
-	s.requireStatusUpdate = true
-	s.effectiveSchedule = newSchedule
 }
 
 func (s *ScheduleHandler) updateEffectiveSchedule() {
@@ -277,11 +277,12 @@ func (s *ScheduleHandler) updateEffectiveSchedule() {
 	err := s.Client.Update(s.CTX, s.effectiveSchedule)
 	if err != nil && !errors.IsNotFound(err) {
 		s.Log.Error(err, "could not update effective schedules", "name", s.effectiveSchedule.Name)
-		// TODO: Add/Update status condition that says effective schedules aren't persisted/updated
+		s.SetConditionFalseWithMessage(k8upv1alpha1.ConditionReady, k8upv1alpha1.ReasonUpdateFailed,
+			"could not update effective schedule '%s': %s", k8upv1alpha1.GetNamespacedName(s.schedule), err.Error())
 	}
 }
 
-// cleanupEffectiveSchedules removes elements in the EffectiveSchedule list that match the jobtype, but aren't randomized.
+// cleanupEffectiveSchedules removes elements in the EffectiveSchedule list that match the job type, but aren't randomized.
 // This is needed in case the schedule spec has changed from randomized to standard cron syntax.
 func (s *ScheduleHandler) cleanupEffectiveSchedules(jobType k8upv1alpha1.JobType, newSchedule k8upv1alpha1.ScheduleDefinition) {
 	if s.effectiveSchedule == nil {
@@ -306,6 +307,6 @@ func (s *ScheduleHandler) deleteEffectiveSchedule() {
 	err := s.Client.Delete(s.CTX, s.effectiveSchedule)
 	if err != nil {
 		s.Log.Info("could not delete effective schedule", "error", err.Error())
-		// TODO: maybe add a condition?
 	}
+	s.SetConditionTrue(k8upv1alpha1.ConditionReady, k8upv1alpha1.ReasonReady)
 }
