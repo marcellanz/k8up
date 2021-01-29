@@ -5,6 +5,7 @@ package controllers_test
 import (
 	"context"
 	"fmt"
+	"os"
 	"path/filepath"
 	"regexp"
 	"strings"
@@ -52,10 +53,16 @@ func (ts *EnvTestSuite) SetupSuite() {
 
 	ts.Ctx = context.Background()
 
+	testbinDir := filepath.Join("..", "testbin", "bin")
+	info, err := os.Stat(testbinDir)
+	absTestbinDir, _ := filepath.Abs(testbinDir)
+	require.NoErrorf(ts.T(), err, "'%s' does not seem to exist. Make sure you run `make integration-test` before you run this test in your IDE.", absTestbinDir)
+	require.Truef(ts.T(), info.IsDir(), "'%s' does not seem to be a directory. Make sure you run `make integration-test` before you run this test in your IDE.", absTestbinDir)
+
 	testEnv := &envtest.Environment{
 		ErrorIfCRDPathMissing: true,
 		CRDDirectoryPaths:     []string{filepath.Join("..", "config", "crd", "apiextensions.k8s.io", "v1", "base")},
-		BinaryAssetsDirectory: filepath.Join("..", "testbin", "bin"),
+		BinaryAssetsDirectory: testbinDir,
 	}
 
 	config, err := testEnv.Start()
