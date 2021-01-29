@@ -216,7 +216,7 @@ func (s *ScheduleHandler) findExistingSchedule(jobType k8upv1alpha1.JobType) (k8
 			continue
 		}
 		if ref.JobType == jobType {
-			return ref.EffectiveSchedule, true
+			return ref.GeneratedSchedule, true
 		}
 	}
 	return "", false
@@ -242,7 +242,7 @@ func (s *ScheduleHandler) setEffectiveSchedule(jobType k8upv1alpha1.JobType, sch
 		Name:              s.schedule.Name,
 		Namespace:         s.schedule.Namespace,
 		JobType:           jobType,
-		EffectiveSchedule: schedule,
+		GeneratedSchedule: schedule,
 	})
 	s.effectiveSchedule.Spec.EffectiveSchedules = schedules
 	s.requireStatusUpdate = true

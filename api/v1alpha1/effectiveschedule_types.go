@@ -40,7 +40,7 @@ type (
 		Name              string             `json:"name,omitempty"`
 		Namespace         string             `json:"namespace,omitempty"`
 		JobType           JobType            `json:"jobType,omitempty"`
-		EffectiveSchedule ScheduleDefinition `json:"effectiveSchedule,omitempty"`
+		GeneratedSchedule ScheduleDefinition `json:"generatedSchedule,omitempty"`
 	}
 )
 

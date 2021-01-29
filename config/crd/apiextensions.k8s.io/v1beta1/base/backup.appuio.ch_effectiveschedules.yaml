@@ -48,7 +48,7 @@ spec:
               items:
                 description: JobRef represents a reference to a job in a Schedule object
                 properties:
-                  effectiveSchedule:
+                  generatedSchedule:
                     description: ScheduleDefinition is the actual cron-type expression that defines the interval of the actions.
                     type: string
                   jobType:

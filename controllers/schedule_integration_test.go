@@ -18,7 +18,7 @@ import (
 type (
 	ScheduleControllerTestSuite struct {
 		EnvTestSuite
-		reconciler *controllers.ScheduleReconciler
+		reconciler    *controllers.ScheduleReconciler
 		givenSchedule *k8upv1alpha1.Schedule
 	}
 )
@@ -45,7 +45,7 @@ func (ts *ScheduleControllerTestSuite) Test_GivenScheduleWithRandomSchedules_Whe
 	ts.Assert().Equal(ts.givenSchedule.Name, ref.Name)
 	ts.Assert().Equal(ts.givenSchedule.Namespace, ref.Namespace)
 	ts.Assert().Equal(k8upv1alpha1.BackupType, ref.JobType)
-	ts.Assert().False(ref.EffectiveSchedule.IsNonStandard())
+	ts.Assert().False(ref.GeneratedSchedule.IsNonStandard())
 
 	// Change schedule spec
 	resultSchedule := &k8upv1alpha1.Schedule{}
