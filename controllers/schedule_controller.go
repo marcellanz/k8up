@@ -45,7 +45,7 @@ func (r *ScheduleReconciler) Reconcile(ctx context.Context, req ctrl.Request) (c
 		return reconcile.Result{}, err
 	}
 
-	effectiveSchedule, err := r.fetchEffectiveScheduleResource(ctx, schedule)
+	effectiveSchedule, err := r.FetchEffectiveScheduleResource(ctx, schedule)
 	if err != nil {
 		r.Log.Info("could not retrieve list of effective schedules, try later again", "error", err.Error())
 		return ctrl.Result{Requeue: true, RequeueAfter: 60 * time.Minute}, err
@@ -60,6 +60,7 @@ func (r *ScheduleReconciler) Reconcile(ctx context.Context, req ctrl.Request) (c
 	return ctrl.Result{}, handler.NewScheduleHandler(config, schedule, effectiveSchedule).Handle()
 }
 
+// SetupWithManager configures the reconciler.
 func (r *ScheduleReconciler) SetupWithManager(mgr ctrl.Manager) error {
 	return ctrl.NewControllerManagedBy(mgr).
 		For(&k8upv1alpha1.Schedule{}).
@@ -67,21 +68,27 @@ func (r *ScheduleReconciler) SetupWithManager(mgr ctrl.Manager) error {
 		Complete(r)
 }
 
-func (s *ScheduleReconciler) fetchEffectiveScheduleResource(ctx context.Context, schedule *k8upv1alpha1.Schedule) (*k8upv1alpha1.EffectiveSchedule, error) {
-	list := &k8upv1alpha1.EffectiveScheduleList{}
-	err := s.Client.List(ctx, list, client.InNamespace(cfg.Config.OperatorNamespace))
+// FetchEffectiveScheduleResource retrieves a list of EffectiveSchedules and filter the one that matches the given schedule.
+// Returns an error if the listing failed, but nil when no matching EffectiveSchedule object was found.
+func (r *ScheduleReconciler) FetchEffectiveScheduleResource(ctx context.Context, schedule *k8upv1alpha1.Schedule) (*k8upv1alpha1.EffectiveSchedule, error) {
+	list := k8upv1alpha1.EffectiveScheduleList{}
+	err := r.Client.List(ctx, &list, client.InNamespace(cfg.Config.OperatorNamespace))
 	if err != nil {
 		return nil, err
 	}
+	return filterEffectiveSchedule(list, schedule), nil
+}
+
+func filterEffectiveSchedule(list k8upv1alpha1.EffectiveScheduleList, schedule *k8upv1alpha1.Schedule) *k8upv1alpha1.EffectiveSchedule {
 	for _, effectiveSchedule := range list.Items {
 		if effectiveSchedule.GetDeletionTimestamp() != nil {
 			continue
 		}
 		for _, jobRef := range effectiveSchedule.Spec.EffectiveSchedules {
 			if schedule.IsReferencedBy(jobRef) {
-				return &effectiveSchedule, nil
+				return &effectiveSchedule
 			}
 		}
 	}
-	return nil, nil
+	return nil
 }

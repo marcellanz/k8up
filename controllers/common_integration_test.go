@@ -4,24 +4,20 @@ package controllers_test
 
 import (
 	"context"
-	"fmt"
 	"path/filepath"
 	"regexp"
 	"strings"
-	"testing"
 	"time"
 
 	"github.com/go-logr/logr"
 	"github.com/go-logr/zapr"
-	"github.com/stretchr/testify/assert"
-	"github.com/stretchr/testify/require"
 	"github.com/stretchr/testify/suite"
 	"go.uber.org/zap/zaptest"
 	batchv1 "k8s.io/api/batch/v1"
 	corev1 "k8s.io/api/core/v1"
 	metav1 "k8s.io/apimachinery/pkg/apis/meta/v1"
+	"k8s.io/apimachinery/pkg/runtime"
 	"k8s.io/apimachinery/pkg/util/validation"
-	"k8s.io/client-go/kubernetes/scheme"
 	"k8s.io/client-go/rest"
 	"sigs.k8s.io/controller-runtime/pkg/client"
 	"sigs.k8s.io/controller-runtime/pkg/envtest"
@@ -44,6 +40,7 @@ type EnvTestSuite struct {
 	Env    *envtest.Environment
 	Logger logr.Logger
 	Ctx    context.Context
+	Scheme *runtime.Scheme
 }
 
 func (ts *EnvTestSuite) SetupSuite() {
@@ -59,16 +56,16 @@ func (ts *EnvTestSuite) SetupSuite() {
 	}
 
 	config, err := testEnv.Start()
-	require.NoError(ts.T(), err)
-	require.NotNil(ts.T(), config)
+	ts.Require().NoError(err)
+	ts.Require().NotNil(config)
 
-	registerCRDs(ts.T())
+	registerCRDs(ts)
 
 	k8sClient, err := client.New(config, client.Options{
-		Scheme: scheme.Scheme,
+		Scheme: ts.Scheme,
 	})
-	require.NoError(ts.T(), err)
-	require.NotNil(ts.T(), k8sClient)
+	ts.Require().NoError(err)
+	ts.Require().NotNil(k8sClient)
 
 	executor.GetExecutor()
 
@@ -77,16 +74,18 @@ func (ts *EnvTestSuite) SetupSuite() {
 	ts.Client = k8sClient
 }
 
-func registerCRDs(t *testing.T) {
-	require.NoError(t, batchv1.AddToScheme(scheme.Scheme))
-	require.NoError(t, k8upv1a1.AddToScheme(scheme.Scheme))
+func registerCRDs(ts *EnvTestSuite) {
+	ts.Scheme = runtime.NewScheme()
+	ts.Require().NoError(corev1.AddToScheme(ts.Scheme))
+	ts.Require().NoError(batchv1.AddToScheme(ts.Scheme))
+	ts.Require().NoError(k8upv1a1.AddToScheme(ts.Scheme))
 
 	// +kubebuilder:scaffold:scheme
 }
 
 func (ts *EnvTestSuite) TearDownSuite() {
 	err := ts.Env.Stop()
-	require.NoError(ts.T(), err)
+	ts.Require().NoError(err)
 }
 
 type AssertFunc func(timedCtx context.Context) (done bool, err error)
@@ -101,7 +100,7 @@ func (ts *EnvTestSuite) RepeatedAssert(timeout time.Duration, interval time.Dura
 		case <-time.After(interval):
 			i++
 			done, err := assertFunc(timedCtx)
-			require.NoError(ts.T(), err)
+			ts.Require().NoError(err)
 			if done {
 				return
 			}
@@ -110,7 +109,7 @@ func (ts *EnvTestSuite) RepeatedAssert(timeout time.Duration, interval time.Dura
 				failureMsg = timedCtx.Err().Error()
 			}
 
-			assert.Failf(ts.T(), failureMsg, "Failed after %s (%d attempts)", timeout, i)
+			ts.Failf(failureMsg, "Failed after %s (%d attempts)", timeout, i)
 			return
 		}
 	}
@@ -118,7 +117,7 @@ func (ts *EnvTestSuite) RepeatedAssert(timeout time.Duration, interval time.Dura
 
 // NewNS instantiates a new Namespace object with the given name.
 func (ts *EnvTestSuite) NewNS(nsName string) *corev1.Namespace {
-	require.Emptyf(ts.T(), validation.IsDNS1123Label(nsName), "'%s' does not appear to be a valid name for a namespace", nsName)
+	ts.Assert().Emptyf(validation.IsDNS1123Label(nsName), "'%s' does not appear to be a valid name for a namespace", nsName)
 
 	return &corev1.Namespace{
 		ObjectMeta: metav1.ObjectMeta{
@@ -130,21 +129,20 @@ func (ts *EnvTestSuite) NewNS(nsName string) *corev1.Namespace {
 // NewNS creates a new Namespace object using EnvTestSuite.Client.
 func (ts *EnvTestSuite) CreateNS(nsName string) error {
 	ns := ts.NewNS(nsName)
-	err := ts.Client.Create(ts.Ctx, ns)
-	return err
+	ts.T().Logf("creating namespace '%s'", nsName)
+	return ts.Client.Create(ts.Ctx, ns)
+}
+
+// CreateResources ensures that the given resources are existing in the suite. Each error will fail the test.
+func (ts *EnvTestSuite) CreateResources(resources ...client.Object) {
+	for _, resource := range resources {
+		ts.T().Logf("creating '%s/%s'", resource.GetNamespace(), resource.GetName())
+		ts.Require().NoError(ts.Client.Create(ts.Ctx, resource))
+	}
 }
 
 // SanitizeNameForNS first converts the given name to lowercase using strings.ToLower
 // and then remove all characters but `a-z` (only lower case), `0-9` and the `-` (dash).
 func (ts *EnvTestSuite) SanitizeNameForNS(name string) string {
 	return InvalidNSNameCharacters.ReplaceAllString(strings.ToLower(name), "")
-}
-
-// BeforeTest is invoked just before every test starts
-func (ts *EnvTestSuite) BeforeTest(suiteName, testName string) {
-	ts.NS = ts.SanitizeNameForNS(fmt.Sprintf("%s-%s", suiteName, testName))
-
-	err := ts.CreateNS(ts.NS)
-	require.NoError(ts.T(), err)
-	ts.T().Logf("Created NS '%s'", ts.NS)
 }
