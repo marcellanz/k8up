@@ -6,7 +6,6 @@ import (
 
 type (
 	// +kubebuilder:object:root=true
-	// +kubebuilder:subresource:status
 	// +kubebuilder:printcolumn:name="Schedule Namespace",type="string",JSONPath=`.spec.effectiveSchedules[0].namespace`,description="Schedule Namespace"
 	// +kubebuilder:printcolumn:name="Schedule Name",type="string",JSONPath=`.spec.effectiveSchedules[0].name`,description="Schedule Name"
 	// +kubebuilder:printcolumn:name="Age",type="date",JSONPath=".metadata.creationTimestamp"
@@ -16,8 +15,7 @@ type (
 		metav1.TypeMeta   `json:",inline"`
 		metav1.ObjectMeta `json:"metadata,omitempty"`
 
-		Spec   EffectiveScheduleSpec   `json:"spec,omitempty"`
-		Status EffectiveScheduleStatus `json:"status,omitempty"`
+		Spec EffectiveScheduleSpec `json:"spec,omitempty"`
 	}
 
 	// +kubebuilder:object:root=true
@@ -43,14 +41,6 @@ type (
 		Namespace         string             `json:"namespace,omitempty"`
 		JobType           JobType            `json:"jobType,omitempty"`
 		EffectiveSchedule ScheduleDefinition `json:"effectiveSchedule,omitempty"`
-	}
-
-	// EffectiveScheduleStatus defines the observed state of EffectiveSchedule
-	EffectiveScheduleStatus struct {
-		// Conditions provide a standard mechanism for higher-level status reporting from a controller.
-		// They are an extension mechanism which allows tools and other controllers to collect summary information about
-		// resources without needing to understand resource-specific status details.
-		Conditions []metav1.Condition `json:"conditions,omitempty"`
 	}
 )
 
