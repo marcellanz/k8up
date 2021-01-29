@@ -49,15 +49,15 @@ spec:
                 items:
                   description: JobRef represents a reference to a job in a Schedule object
                   properties:
+                    effectiveSchedule:
+                      description: ScheduleDefinition is the actual cron-type expression that defines the interval of the actions.
+                      type: string
                     jobType:
                       description: JobType defines what job type this is.
                       type: string
                     name:
                       type: string
                     namespace:
-                      type: string
-                    schedule:
-                      description: ScheduleDefinition is the actual cron-type expression that defines the interval of the actions.
                       type: string
                   type: object
                 type: array

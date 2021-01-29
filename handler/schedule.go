@@ -216,7 +216,7 @@ func (s *ScheduleHandler) findExistingSchedule(jobType k8upv1alpha1.JobType) (k8
 			continue
 		}
 		if ref.JobType == jobType {
-			return ref.Schedule, true
+			return ref.EffectiveSchedule, true
 		}
 	}
 	return "", false
@@ -239,10 +239,10 @@ func (s *ScheduleHandler) setEffectiveSchedule(jobType k8upv1alpha1.JobType, sch
 	}
 	schedules := s.effectiveSchedule.Spec.EffectiveSchedules
 	schedules = append(schedules, k8upv1alpha1.JobRef{
-		Name:      s.schedule.Name,
-		Namespace: s.schedule.Namespace,
-		JobType:   jobType,
-		Schedule:  schedule,
+		Name:              s.schedule.Name,
+		Namespace:         s.schedule.Namespace,
+		JobType:           jobType,
+		EffectiveSchedule: schedule,
 	})
 	s.effectiveSchedule.Spec.EffectiveSchedules = schedules
 	s.requireStatusUpdate = true

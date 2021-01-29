@@ -39,10 +39,10 @@ type (
 
 	// JobRef represents a reference to a job in a Schedule object
 	JobRef struct {
-		Name      string             `json:"name,omitempty"`
-		Namespace string             `json:"namespace,omitempty"`
-		JobType   JobType            `json:"jobType,omitempty"`
-		Schedule  ScheduleDefinition `json:"schedule,omitempty"`
+		Name              string             `json:"name,omitempty"`
+		Namespace         string             `json:"namespace,omitempty"`
+		JobType           JobType            `json:"jobType,omitempty"`
+		EffectiveSchedule ScheduleDefinition `json:"effectiveSchedule,omitempty"`
 	}
 
 	// EffectiveScheduleStatus defines the observed state of EffectiveSchedule

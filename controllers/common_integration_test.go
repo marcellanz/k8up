@@ -126,7 +126,7 @@ func (ts *EnvTestSuite) NewNS(nsName string) *corev1.Namespace {
 	}
 }
 
-// NewNS creates a new Namespace object using EnvTestSuite.Client.
+// CreateNS creates a new Namespace object using EnvTestSuite.Client.
 func (ts *EnvTestSuite) CreateNS(nsName string) error {
 	ns := ts.NewNS(nsName)
 	ts.T().Logf("creating namespace '%s'", nsName)
