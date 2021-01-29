@@ -40,7 +40,7 @@ func (r *RestoreTestSuite) TestReconciliation() {
 	r.expectAJobEventually()
 }
 
-func (r *RestoreTestSuite) SetupTest() {
+func (r *RestoreTestSuite) BeforeTest(suiteName, testName string) {
 	r.RestoreName = "restore-integration-test"
 }
 
@@ -63,7 +63,7 @@ func NewRestoreResource(restoreName, namespace string) *k8upv1a1.Restore {
 
 func (r *RestoreTestSuite) givenRestoreResource() {
 	r.GivenRestore = NewRestoreResource(r.RestoreName, r.NS)
-	r.CreateResources(r.GivenRestore)
+	r.EnsureResources(r.GivenRestore)
 }
 
 func (r *RestoreTestSuite) whenReconcile() controllerruntime.Result {

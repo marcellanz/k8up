@@ -1,9 +1,8 @@
 package v1alpha1
 
 import (
-	"fmt"
-
 	metav1 "k8s.io/apimachinery/pkg/apis/meta/v1"
+	"k8s.io/apimachinery/pkg/types"
 )
 
 type (
@@ -71,9 +70,9 @@ func (r ConditionReason) String() string {
 	return string(r)
 }
 
-// Gets the resource name in the form of <namespace>/<name>
-func GetNamespacedName(obj metav1.Object) string {
-	return fmt.Sprintf("%s/%s", obj.GetNamespace(), obj.GetName())
+// GetNamespacedName translates the given object meta into NamespacedName object
+func GetNamespacedName(obj metav1.Object) types.NamespacedName {
+	return types.NamespacedName{Name: obj.GetName(), Namespace: obj.GetNamespace()}
 }
 
 // Status defines the observed state of a generic K8up job. It is used for the

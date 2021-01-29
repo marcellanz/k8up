@@ -17,8 +17,11 @@ import (
 	corev1 "k8s.io/api/core/v1"
 	metav1 "k8s.io/apimachinery/pkg/apis/meta/v1"
 	"k8s.io/apimachinery/pkg/runtime"
+	"k8s.io/apimachinery/pkg/types"
+	"k8s.io/apimachinery/pkg/util/rand"
 	"k8s.io/apimachinery/pkg/util/validation"
 	"k8s.io/client-go/rest"
+	ctrl "sigs.k8s.io/controller-runtime"
 	"sigs.k8s.io/controller-runtime/pkg/client"
 	"sigs.k8s.io/controller-runtime/pkg/envtest"
 	"sigs.k8s.io/controller-runtime/pkg/log"
@@ -133,12 +136,45 @@ func (ts *EnvTestSuite) CreateNS(nsName string) error {
 	return ts.Client.Create(ts.Ctx, ns)
 }
 
-// CreateResources ensures that the given resources are existing in the suite. Each error will fail the test.
-func (ts *EnvTestSuite) CreateResources(resources ...client.Object) {
+// EnsureResources ensures that the given resources are existing in the suite. Each error will fail the test.
+func (ts *EnvTestSuite) EnsureResources(resources ...client.Object) {
 	for _, resource := range resources {
 		ts.T().Logf("creating '%s/%s'", resource.GetNamespace(), resource.GetName())
 		ts.Require().NoError(ts.Client.Create(ts.Ctx, resource))
 	}
+}
+
+// UpdateResources ensures that the given resources are updated in the suite. Each error will fail the test.
+func (ts *EnvTestSuite) UpdateResources(resources ...client.Object) {
+	for _, resource := range resources {
+		ts.T().Logf("updating '%s/%s'", resource.GetNamespace(), resource.GetName())
+		ts.Require().NoError(ts.Client.Update(ts.Ctx, resource))
+	}
+}
+
+// FetchResource fetches the given object name and stores the result in the given object.
+// Test fails on errors.
+func (ts *EnvTestSuite) FetchResource(name types.NamespacedName, object client.Object) {
+	ts.Require().NoError(ts.Client.Get(ts.Ctx, name, object))
+}
+
+// FetchResource fetches resources and puts the items into the given list with the given list options.
+// Test fails on errors.
+func (ts *EnvTestSuite) FetchResources(objectList client.ObjectList, opts ...client.ListOption) {
+	ts.Require().NoError(ts.Client.List(ts.Ctx, objectList, opts...))
+}
+
+// ToRequest transforms the given object into a reconcile Request.
+func (ts *EnvTestSuite) ToRequest(object metav1.Object) ctrl.Request {
+	return ctrl.Request{
+		NamespacedName: types.NamespacedName{Name: object.GetName(), Namespace: object.GetNamespace()},
+	}
+}
+
+// BeforeTest is invoked just before every test starts
+func (ts *EnvTestSuite) SetupTest() {
+	ts.NS = rand.String(8)
+	ts.Require().NoError(ts.CreateNS(ts.NS))
 }
 
 // SanitizeNameForNS first converts the given name to lowercase using strings.ToLower

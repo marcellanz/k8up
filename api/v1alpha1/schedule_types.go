@@ -89,6 +89,7 @@ type ScheduleList struct {
 }
 
 const (
+	// ScheduleFinalizerName is a Finalizer added to resources that need cleanup cron schedules before deleting them.
 	ScheduleFinalizerName = "k8up.syn.tools/schedule"
 )
 
@@ -142,6 +143,7 @@ func (s ScheduleDefinition) IsRandom() bool {
 	return s.IsNonStandard() && strings.HasSuffix(string(s), "-random")
 }
 
+// IsReferencedBy returns true if the given ref matches the schedule's name and namespace.
 func (s *Schedule) IsReferencedBy(ref JobRef) bool {
 	return ref.Namespace == s.Namespace && ref.Name == s.Name
 }
